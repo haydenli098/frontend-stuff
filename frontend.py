@@ -1,48 +1,27 @@
 import streamlit as st
-import importlib.util
-import time
 
 # Import your existing modules
 # We use aliases to avoid naming conflicts since they share function names
 import MLP as mlp_backend
 import RNN as rnn_backend
-
-# Workaround to import a file with spaces in the name ('Rotation to yield.py')
-# APSIM requires .NET runtime, which may not be available on cloud deployments
-apsim_backend = None
-try:
-    spec = importlib.util.spec_from_file_location("rotation_to_yield", "Rotation to yield.py")
-    apsim_backend = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(apsim_backend)
-except RuntimeError as e:
-    if ".NET runtime" in str(e):
-        st.warning("⚠️ APSIM Simulator unavailable (requires .NET runtime). Use MLP/RNN surrogates instead.")
-    else:
-        raise
+import NB as nb_backend
 
 st.set_page_config(page_title="Crop Rotation Optimizer", layout="wide")
 
 st.title("🌾 Crop Rotation Optimization Dashboard")
-st.markdown("Use Digital Twins (MLP / RNN) or the APSIM Engine to find the optimal crop sequence for your paddock.")
+st.markdown("Use Digital Twins (MLP / RNN / Naive Bayes) to find the optimal crop sequence for your paddock.")
 
 # --- SIDEBAR SETTINGS ---
 st.sidebar.header("Configuration")
-engine_options = ["MLP Surrogate", "RNN Surrogate"]
-if apsim_backend is not None:
-    engine_options.append("APSIM Simulator")
-
 engine_choice = st.sidebar.selectbox(
     "Select Prediction Engine:",
-    engine_options
+    ["MLP Surrogate", "RNN Surrogate", "Naive Bayes Classifier"]
 )
 
 st.sidebar.markdown("---")
 st.sidebar.header("Location Input")
 lat_input = st.sidebar.number_input("Latitude", value=-33.8, format="%.4f")
 lon_input = st.sidebar.number_input("Longitude", value=151.2, format="%.4f")
-
-if engine_choice == "APSIM Simulator":
-    rotation_to_test = st.sidebar.text_input("Crop Sequence to Simulate", value="Wheat, Canola, Wheat, Chickpea, Barley")
 
 # Caching the training step so it only happens ONCE while the app is running
 @st.cache_resource
@@ -52,6 +31,11 @@ def load_mlp():
 @st.cache_resource
 def load_rnn():
     return rnn_backend.load_or_train_model()
+
+@st.cache_resource
+def load_nb():
+    # Load NB model (trains on startup)
+    return nb_backend
 
 # --- MAIN DASHBOARD ---
 st.write(f"### Currently using: **{engine_choice}**")
@@ -110,27 +94,18 @@ if st.sidebar.button("Run Optimizer / Simulator", type="primary"):
                     if year < 5:
                         cols[year].metric(label=f"Year {year+1} ({crop})", value=f"{yield_val:.1f} kg/ha")
 
-            elif engine_choice == "APSIM Simulator":
-                st.warning("Running the physical APSIM engine... This might take a moment.")
+            elif engine_choice == "Naive Bayes Classifier":
+                # 1. Load NB Model
+                st.toast("Loading Naive Bayes Model... Please wait.", icon="⏳")
+                nb_model = load_nb()
                 
-                st.write(f"**Simulating Rotation:** {rotation_to_test}")
+                # 2. Predict rotation using coordinates
+                st.info(f"📍 Finding nearby location with similar soil properties...")
+                predicted_rotation = nb_model.predict_crop_rotation_by_coordinates(lat_input, lon_input)
                 
-                # 1. Run Simulation
-                start_time = time.time()
-                result = apsim_backend.simulate_rotation_yield(
-                    rotation=rotation_to_test, 
-                    lat=lat_input, 
-                    lon=lon_input, 
-                    sim_id="streamlit_run"
-                )
-                
-                st.success(f"Simulation Complete in {time.time() - start_time:.1f} seconds!")
-                st.metric(label="Total 5-Year Yield", value=f"{result['TotalYield']} kg/ha")
-                
-                # Display Yearly Breakdown
-                cols = st.columns(5)
-                for year, yield_val in enumerate(result['YearlyYields']):
-                    cols[year].metric(label=f"Year {year+1}", value=f"{yield_val}")
+                st.success("Prediction Complete!")
+                st.metric(label="Recommended Crop Rotation", value=predicted_rotation)
+                st.write(f"*Based on soil properties and environmental conditions at ({lat_input:.4f}, {lon_input:.4f})*")
 
         except Exception as e:
             st.error(f"An error occurred: {e}")
