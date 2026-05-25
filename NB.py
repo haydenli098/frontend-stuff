@@ -7,6 +7,10 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 from scipy.spatial import KDTree
 import matplotlib.pyplot as plt
 import seaborn as sns
+import warnings
+
+# Suppress sklearn feature names warning
+warnings.filterwarnings('ignore', message='X does not have valid feature names')
 
 # =========================
 # 1. LOAD + SPLIT DATA
