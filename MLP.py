@@ -236,7 +236,7 @@ def train_model():
 def load_or_train_model():
     if os.path.exists('mlp_model_full.pth') and os.path.exists('mlp_scaler_x.pkl') and os.path.exists('mlp_scaler_y.pkl'):
         print("Loading existing MLP model and scalers...")
-        checkpoint = torch.load('mlp_model_full.pth')
+        checkpoint = torch.load('mlp_model_full.pth', weights_only=False)
         model = CropRotationPredictor(
             num_env_features=checkpoint['num_env_features'],
             num_crops=checkpoint['num_crops'],

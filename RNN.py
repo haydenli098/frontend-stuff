@@ -259,7 +259,7 @@ def train_model():
 def load_or_train_model():
     if os.path.exists('rnn_model_full.pth') and os.path.exists('rnn_scaler_x.pkl') and os.path.exists('rnn_scaler_y.pkl'):
         print("Loading existing RNN model and scalers...")
-        checkpoint = torch.load('rnn_model_full.pth')
+        checkpoint = torch.load('rnn_model_full.pth', weights_only=False)
         model = CropRotationRNN(
             num_env_features=checkpoint['num_env_features'],
             num_crops=checkpoint['num_crops'],
