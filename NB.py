@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import GaussianNB
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
 from scipy.spatial import KDTree
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -111,7 +111,9 @@ if __name__ == "__main__":
     ]
 
     pipeline_acc = accuracy_score(y_test, pipeline_test_preds)
+    pipeline_f1 = f1_score(y_test, pipeline_test_preds, average='weighted')
     print(f"Pipeline Accuracy: {pipeline_acc:.2%}")
+    print(f"Pipeline F1 Score (Weighted): {pipeline_f1:.4f}")
 
     # =========================
     # 5. RANDOM SPOT CHECKS

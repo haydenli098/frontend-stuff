@@ -70,12 +70,25 @@ if st.sidebar.button("Run Optimizer / Simulator", type="primary"):
             if engine_choice == "MLP Surrogate":
                 # 1. Load/Train Model
                 st.toast("Loading MLP Model... Please wait.", icon="⏳")
+                
+                # The load function now returns metrics as the 4th value
                 try:
-                    trained_model, scaler_x, scaler_y = load_mlp()
+                    trained_model, scaler_x, scaler_y, metrics = load_mlp()
                 except Exception as e:
                     st.error(f"Error loading MLP model: {e}")
                     st.stop()
                 
+                # Display metrics in the sidebar if they exist
+                if metrics and metrics.get('r2') is not None:
+                    st.sidebar.markdown("---")
+                    st.sidebar.header("MLP Model Performance")
+                    st.sidebar.metric("R² Score", f"{metrics['r2']:.4f}")
+                    st.sidebar.metric("Mean Absolute Error", f"{metrics['mae']:.2f} kg/ha")
+                    if metrics.get('f1') is not None:
+                        st.sidebar.metric("F1 Score", f"{metrics['f1']:.4f}")
+                    if metrics.get('f1') is not None:
+                        st.sidebar.metric("F1 Score", f"{metrics['f1']:.4f}")
+
                 # 2. Fetch Enviro Data
                 try:
                     enviro_data = mlp_backend.get_enviro_data(lat_input, lon_input)
@@ -108,12 +121,21 @@ if st.sidebar.button("Run Optimizer / Simulator", type="primary"):
             elif engine_choice == "RNN Surrogate":
                 # 1. Load/Train Model
                 st.toast("Loading RNN Model... Please wait.", icon="⏳")
+                
+                # The load function now returns metrics as the 4th value
                 try:
-                    trained_model, scaler_x, scaler_y = load_rnn()
+                    trained_model, scaler_x, scaler_y, metrics = load_rnn()
                 except Exception as e:
                     st.error(f"Error loading RNN model: {e}")
                     st.stop()
                 
+                # Display metrics in the sidebar if they exist
+                if metrics and metrics.get('r2') is not None:
+                    st.sidebar.markdown("---")
+                    st.sidebar.header("RNN Model Performance")
+                    st.sidebar.metric("R² Score", f"{metrics['r2']:.4f}")
+                    st.sidebar.metric("Mean Absolute Error", f"{metrics['mae']:.2f} kg/ha")
+
                 # 2. Fetch Enviro Data
                 try:
                     enviro_data = rnn_backend.get_enviro_data(lat_input, lon_input)

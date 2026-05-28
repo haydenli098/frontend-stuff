@@ -8,7 +8,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from sklearn.metrics import mean_absolute_error, r2_score, mean_squared_error
+from sklearn.metrics import mean_absolute_error, r2_score, mean_squared_error, f1_score
 import matplotlib.pyplot as plt
 import pickle
 
@@ -111,9 +111,9 @@ def train_model():
     df = pd.read_parquet(DATA_FILE)
     print(f"Loaded {len(df)} total samples from APSIM Parquet dataset.")
 
-    if len(df) > 10000:
-        df = df.sample(n=10000, random_state=42).reset_index(drop=True)
-        print("Randomly selected 10,000 samples for training.")
+     # if len(df) > 10000:
+    #     df = df.sample(n=10000, random_state=42).reset_index(drop=True)
+    #     print("Randomly selected 10,000 samples for training.")
 
     initial_count = len(df)
     df = df[df['TotalYield'] > 0.1]
@@ -217,10 +217,18 @@ def train_model():
         mae = mean_absolute_error(actual_yields, predicted_yields)
         rmse = np.sqrt(mean_squared_error(actual_yields, predicted_yields))
 
+        # Calculate F1 score by treating yield prediction as a binary classification task
+        # (e.g., 1 if yield is above the median, 0 otherwise)
+        threshold = np.median(actual_yields)
+        actual_classes = (actual_yields > threshold).astype(int)
+        predicted_classes = (predicted_yields > threshold).astype(int)
+        f1 = f1_score(actual_classes.flatten(), predicted_classes.flatten(), average='weighted')
+
         print(f"\n--- MODEL ACCURACY ---")
         print(f"Test R-squared (R²): {r2:.4f}")
         print(f"Mean Absolute Error: {mae:.2f} kg/ha off on average")
         print(f"Root Mean Squared Error: {rmse:.2f} kg/ha off on average")
+        print(f"F1 Score (Above/Below Median): {f1:.4f}")
         print(f"----------------------\n")
         
     # Save model and scalers
@@ -231,14 +239,19 @@ def train_model():
         'rotation_length': ROTATION_LENGTH,
         'num_targets': num_targets,
         'hidden_size': 128,
-        'num_layers': 3
+        'num_layers': 3,
+        'r2': r2,
+        'mae': mae,
+        'rmse': rmse,
+        'f1': f1
     }, 'rnn_model_full.pth')
     with open('rnn_scaler_x.pkl', 'wb') as f:
         pickle.dump(scaler_X, f)
     with open('rnn_scaler_y.pkl', 'wb') as f:
         pickle.dump(scaler_y, f)
 
-    return model, scaler_X, scaler_y
+    metrics = {'r2': r2, 'mae': mae, 'rmse': rmse, 'f1': f1}
+    return model, scaler_X, scaler_y, metrics
 
 # ==========================================
 # 3.5 LOAD OR TRAIN
@@ -260,7 +273,25 @@ def load_or_train_model():
             scaler_X = pickle.load(f)
         with open('rnn_scaler_y.pkl', 'rb') as f:
             scaler_y = pickle.load(f)
-        return model, scaler_X, scaler_y
+            
+        if 'r2' in checkpoint:
+            print(f"\n--- SAVED MODEL ACCURACY ---")
+            print(f"Test R-squared (R²): {checkpoint['r2']:.4f}")
+            print(f"Mean Absolute Error: {checkpoint['mae']:.2f} kg/ha off on average")
+            print(f"Root Mean Squared Error: {checkpoint['rmse']:.2f} kg/ha off on average")
+            if 'f1' in checkpoint:
+                print(f"F1 Score (Above/Below Median): {checkpoint['f1']:.4f}")
+            print(f"----------------------------\n")
+        else:
+            print("\n⚠️ Metrics not found in saved model. Delete 'rnn_model_full.pth' and retrain to see accuracy metrics.\n")
+            
+        metrics = {
+            'r2': checkpoint.get('r2'),
+            'mae': checkpoint.get('mae'),
+            'rmse': checkpoint.get('rmse'),
+            'f1': checkpoint.get('f1')
+        }
+        return model, scaler_X, scaler_y, metrics
     else:
         print("Saved model not found. Training from scratch...")
         return train_model()
@@ -354,7 +385,7 @@ def get_enviro_data(lat, long):
     ]
 
 if __name__ == "__main__":
-    trained_model, scaler_x, scaler_y = load_or_train_model()
+    trained_model, scaler_x, scaler_y, _ = load_or_train_model()
     
     # Try to read a random location from the dataset
     try:
@@ -377,7 +408,7 @@ if __name__ == "__main__":
     
     enviro_data = get_enviro_data(lat, lon)
 
-    best_seq, expected_revenue, best_yields = optimize_rotation(trained_model, scaler_x, scaler_y, enviro_data, iterations=5000)
+    best_seq, expected_revenue, best_yields = optimize_rotation(trained_model, scaler_x, scaler_y, enviro_data, iterations=2000)
 
     print(f"\n✅ OPTIMAL 5-YEAR ROTATION: {best_seq}")
     print(f"📈 PREDICTED REVENUE: ${expected_revenue:.2f} / ha")
