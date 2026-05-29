@@ -5,13 +5,6 @@ import streamlit as st
 import MLP as mlp_backend
 import RNN as rnn_backend
 
-# NB requires loading data and training - do this lazily to avoid timeout
-try:
-    import NB as nb_backend
-except Exception as e:
-    nb_backend = None
-    st.warning(f"⚠️ Naive Bayes unavailable: {str(e)[:100]}")
-
 st.set_page_config(page_title="Crop Rotation Optimizer", layout="wide")
 
 st.title("🌾 Crop Rotation Optimization Dashboard")
@@ -34,8 +27,6 @@ if missing_files:
 # --- SIDEBAR SETTINGS ---
 st.sidebar.header("Configuration")
 engine_options = ["MLP Surrogate", "RNN Surrogate"]
-if nb_backend is not None:
-    engine_options.append("Naive Bayes Classifier")
 
 engine_choice = st.sidebar.selectbox(
     "Select Prediction Engine:",
@@ -55,11 +46,6 @@ def load_mlp():
 @st.cache_resource
 def load_rnn():
     return rnn_backend.load_or_train_model()
-
-@st.cache_resource
-def load_nb():
-    # Load NB model (trains on startup)
-    return nb_backend
 
 # --- MAIN DASHBOARD ---
 st.write(f"### Currently using: **{engine_choice}**")
@@ -84,8 +70,6 @@ if st.sidebar.button("Run Optimizer / Simulator", type="primary"):
                     st.sidebar.header("MLP Model Performance")
                     st.sidebar.metric("R² Score", f"{metrics['r2']:.4f}")
                     st.sidebar.metric("Mean Absolute Error", f"{metrics['mae']:.2f} kg/ha")
-                    if metrics.get('f1') is not None:
-                        st.sidebar.metric("F1 Score", f"{metrics['f1']:.4f}")
                     if metrics.get('f1') is not None:
                         st.sidebar.metric("F1 Score", f"{metrics['f1']:.4f}")
 
@@ -164,28 +148,3 @@ if st.sidebar.button("Run Optimizer / Simulator", type="primary"):
                 for year, (crop, yield_val) in enumerate(zip(crops, best_yields)):
                     if year < 5:
                         cols[year].metric(label=f"Year {year+1} ({crop})", value=f"{yield_val:.1f} kg/ha")
-
-            elif engine_choice == "Naive Bayes Classifier":
-                if nb_backend is None:
-                    st.error("❌ Naive Bayes model unavailable.")
-                    st.stop()
-                
-                # 1. Load NB Model
-                st.toast("Loading Naive Bayes Model... Please wait.", icon="⏳")
-                try:
-                    nb_model = load_nb()
-                except Exception as e:
-                    st.error(f"Error loading Naive Bayes model: {e}")
-                    st.stop()
-                
-                # 2. Predict rotation using coordinates
-                st.info(f"📍 Finding nearby location with similar soil properties...")
-                try:
-                    predicted_rotation = nb_model.predict_crop_rotation_by_coordinates(lat_input, lon_input)
-                except Exception as e:
-                    st.error(f"Error making prediction: {e}")
-                    st.stop()
-                
-                st.success("Prediction Complete!")
-                st.metric(label="Recommended Crop Rotation", value=predicted_rotation)
-                st.write(f"*Based on soil properties and environmental conditions at ({lat_input:.4f}, {lon_input:.4f})*")
